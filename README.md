@@ -1,7 +1,8 @@
-This project develops and optimizes urban biodiversity conservation networks by integrating spatial pattern analysis, connectivity modeling, and complex network theory.
-- Constructs urban biodiversity conservation networks using MSPA, habitat quality assessment (InVEST), landscape connectivity analysis (Confer), and the Least-Cost Path / MCR model  
-- Quantifies structural characteristics of ecological networks using complex network indicators implemented in R and UCINET  
-- Optimizes ecological network configuration using an LDF strategy derived from complex network theory and evaluates robustness through simulation-based analysis in R and Python  
+Developed a karst ecological network optimization framework incorporating disturbance sensitivity, complex network analysis, and robustness-based optimization:
+- Incorporated rocky desertification sensitivity into spatial prioritization of ecological sources and corridor extraction  
+- Applied complex network analysis to characterize network structure and identify critical nodes for connectivity maintenance  
+- Developed and validated an improved Low-Degree-First (LDF) optimization strategy to enhance network robustness under disturbance scenarios  
+- Derived policy-relevant recommendations for ecological restoration and sustainable landscape management in karst regions   
 <img width="4961" height="3508" alt="Graphical abstact" src="https://github.com/user-attachments/assets/e40c3aac-0358-4b00-860f-6acb08e86b56" />
 <img width="2480" height="1850" alt="MSPA" src="https://github.com/user-attachments/assets/bf11e777-2d4f-40fd-892a-da44ebbcb382" />
 <img width="2480" height="2208" alt="生态源地综合" src="https://github.com/user-attachments/assets/be10384a-8aa3-45f8-bc65-777513a1561f" />
