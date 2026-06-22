@@ -1,1 +1,1014 @@
+import pandas as pd
+import numpy as np
+import networkx as nx
+import matplotlib.pyplot as plt
+import random
 
+from itertools import permutations
+
+# =========================================
+# Global Plot Settings
+# =========================================
+plt.rc('font', family='Times New Roman')
+
+f_size = 16  # Font size
+
+
+# =========================================
+# Read R Value Table
+# =========================================
+R_value = pd.read_excel('R值.xlsx')
+
+R_value_dict = {}
+
+for i in range(len(R_value)):
+
+    R_value_dict[
+        R_value.iloc[i, 0]
+    ] = R_value.iloc[i, 1]
+
+print(R_value_dict)
+
+
+# =========================================
+# Random Attack:
+# Randomly remove a node
+# =========================================
+def random_attack(G):
+
+    random_node = random.choice(
+        list(G.nodes())
+    )
+
+    if random_node in G.nodes():
+
+        G.remove_node(random_node)
+
+    return G
+
+
+# =========================================
+# Malicious Attack:
+# Remove nodes according to degree
+# =========================================
+def intentional_attack_degree(graph):
+
+    # Dictionary:
+    # key = node id
+    # value = node degree
+    deg = dict(graph.degree())
+
+    # Sort by degree in descending order
+    sorted_deg = sorted(
+        deg.items(),
+        key=lambda x: x[1],
+        reverse=True
+    )
+
+    # Find all nodes with the maximum degree
+    max_degree_nodes = [
+        node
+        for node, degree in sorted_deg
+        if degree == sorted_deg[0][1]
+    ]
+
+    if len(max_degree_nodes) > 1:
+
+        print('max_degree_nodes', max_degree_nodes)
+
+        for node in max_degree_nodes:
+
+            print(
+                node,
+                R_value_dict.get(node, -float('inf'))
+            )
+
+        # If multiple nodes have the same degree,
+        # further sort them using R value
+        max_degree_nodes.sort(
+            key=lambda x: R_value_dict.get(
+                x,
+                -float('inf')
+            )
+        )
+
+        # Select the node with the highest R value
+        maxd_key = max_degree_nodes[0]
+
+        print('Attack:', maxd_key)
+
+    else:
+
+        # Only one maximum degree node
+        maxd_key = max_degree_nodes[0]
+
+    if maxd_key in graph.nodes():
+
+        graph.remove_node(maxd_key)
+
+    return graph
+
+
+# =========================================
+# Generate Graph from Adjacency Matrix
+# =========================================
+def generate_graph(adjacency_matrix, nodes_name):
+
+    # Create an empty graph
+    G = nx.Graph()
+
+    # Number of nodes
+    num_nodes = len(adjacency_matrix)
+
+    # Traverse adjacency matrix
+    for i in range(num_nodes):
+
+        for j in range(i + 1, num_nodes):
+
+            # Add edge if matrix value equals 1
+            if adjacency_matrix.iloc[i, j] == 1:
+
+                G.add_edge(
+                    nodes_name[i],
+                    nodes_name[j]
+                )
+
+    return G
+
+
+# =========================================
+# Read R Values Again
+# =========================================
+R_value = pd.read_excel('R值.xlsx')
+
+R_value_dict = {}
+
+for i in range(len(R_value)):
+
+    R_value_dict[
+        R_value.iloc[i, 0]
+    ] = R_value.iloc[i, 1]
+
+print(R_value_dict)
+
+
+# =========================================
+# Build Network Before Optimization
+# =========================================
+adj_matrix = pd.read_csv(
+    'LDF.csv',
+    index_col=0
+)
+
+nodes_name = adj_matrix.columns.values.tolist()
+
+G_before = generate_graph(
+    adj_matrix,
+    nodes_name
+)
+
+# Remove self loop edges
+G_before.remove_edges_from([
+    (54, 60),
+    (14, 18),
+    (13, 27)
+])
+
+# Optional network visualization
+# nx.draw(G_before, with_labels=True)
+# plt.savefig('before.png', dpi=300)
+
+
+# =========================================
+# Build Network After Optimization
+# =========================================
+adj_matrix = pd.read_csv(
+    'R_LDF.csv',
+    index_col=0
+)
+
+nodes_name = adj_matrix.columns.values.tolist()
+
+G_after = generate_graph(
+    adj_matrix,
+    nodes_name
+)
+
+n_before = len(G_before.nodes())
+
+n_after = len(G_after.nodes())
+
+print(n_before)
+
+
+# =========================================
+# Network Before Optimization
+# =========================================
+
+# -----------------------------------------
+# Malicious Attack
+# -----------------------------------------
+the_R_array = np.zeros(n_before)
+# Connection Robustness
+
+the_D_array = np.zeros(n_before)
+# Node Recovery Robustness
+
+the_E_array = np.zeros(n_before)
+# Edge Recovery Robustness
+
+c1 = 0
+# Number of removed nodes
+
+G_copy = G_before.copy()
+
+Gcc1 = sorted(
+    nx.connected_components(G_copy),
+    key=len,
+    reverse=True
+)
+
+largest_cc1 = G_copy.subgraph(Gcc1[0])
+
+n_lcc1 = len(largest_cc1.nodes)
+
+the_R = n_lcc1 / (n_before - c1)
+
+print('n_lcc1', n_lcc1)
+
+print('n_before-c1', n_before)
+
+the_R_array[0] = the_R
+
+the_D_array[0] = 1
+
+the_E_array[0] = 1
+
+
+# Iterative attack process
+while True:
+
+    c1 = c1 + 1
+
+    if c1 == n_before:
+
+        break
+
+    G_copy = intentional_attack_degree(G_copy)
+
+    deleted_nodes = (
+        G_before.nodes() -
+        G_copy.nodes()
+    )
+
+    remaining_nodes = G_copy.nodes()
+
+    # Obtain neighboring nodes
+    # of remaining nodes
+    remaining_neighbors = set()
+
+    for node in remaining_nodes:
+
+        neighbors = G_before.neighbors(node)
+
+        remaining_neighbors.update(neighbors)
+
+    # Intersection between
+    # remaining neighbors and deleted nodes
+    recoverable_nodes = (
+        remaining_neighbors.intersection(
+            deleted_nodes
+        )
+    )
+
+    print(
+        'recoverable_nodes',
+        recoverable_nodes
+    )
+
+    the_D = 1 - (
+        len(deleted_nodes) -
+        len(recoverable_nodes)
+    ) / n_before
+
+    deleted_edges = (
+        G_before.edges() -
+        G_copy.edges()
+    )
+
+    recoverable_edges = set()
+
+    for edge in deleted_edges:
+
+        if (
+            edge[0] in G_copy.nodes()
+            and
+            edge[1] in G_copy.nodes()
+        ):
+
+            recoverable_edges.add(edge)
+
+    print(
+        'recoverable_edges',
+        recoverable_edges
+    )
+
+    the_E = 1 - (
+        len(deleted_edges) -
+        len(recoverable_edges)
+    ) / len(G_before.edges())
+
+    if len(G_copy.nodes()) == 1:
+
+        break
+
+    Gcc1 = sorted(
+        nx.connected_components(G_copy),
+        key=len,
+        reverse=True
+    )
+
+    # Largest connected component
+    largest_cc1 = G_copy.subgraph(Gcc1[0])
+
+    n_lcc1 = len(largest_cc1.nodes)
+
+    the_R = n_lcc1 / (n_before - c1)
+
+    # Ratio of largest connected component
+    the_R_array[c1] = the_R
+
+    the_D_array[c1] = the_D
+
+    the_E_array[c1] = the_E
+
+
+before_intention_R = the_R_array
+
+before_intention_D = the_D_array
+
+before_intention_E = the_E_array
+
+
+print("===============")
+
+
+# =========================================
+# Random Attack Before Optimization
+# =========================================
+the_R_array = np.zeros(n_before)
+
+the_D_array = np.zeros(n_before)
+
+the_E_array = np.zeros(n_before)
+
+c1 = 0
+
+G_copy = G_before.copy()
+
+Gcc1 = sorted(
+    nx.connected_components(G_copy),
+    key=len,
+    reverse=True
+)
+
+largest_cc1 = G_copy.subgraph(Gcc1[0])
+
+n_lcc1 = len(largest_cc1.nodes)
+
+the_R = n_lcc1 / (n_before - c1)
+
+the_R_array[0] = the_R
+
+the_D_array[0] = 1
+
+the_E_array[0] = 1
+
+while True:
+
+    c1 = c1 + 1
+
+    if c1 == n_before:
+
+        break
+
+    G_copy = random_attack(G_copy)
+
+    deleted_nodes = (
+        G_before.nodes() -
+        G_copy.nodes()
+    )
+
+    remaining_nodes = G_copy.nodes()
+
+    remaining_neighbors = set()
+
+    for node in remaining_nodes:
+
+        neighbors = G_before.neighbors(node)
+
+        remaining_neighbors.update(neighbors)
+
+    recoverable_nodes = (
+        remaining_neighbors.intersection(
+            deleted_nodes
+        )
+    )
+
+    print(
+        'recoverable_nodes',
+        recoverable_nodes
+    )
+
+    the_D = 1 - (
+        len(deleted_nodes) -
+        len(recoverable_nodes)
+    ) / n_before
+
+    deleted_edges = (
+        G_before.edges() -
+        G_copy.edges()
+    )
+
+    recoverable_edges = set()
+
+    for edge in deleted_edges:
+
+        if (
+            edge[0] in G_copy.nodes()
+            and
+            edge[1] in G_copy.nodes()
+        ):
+
+            recoverable_edges.add(edge)
+
+    print(
+        'recoverable_edges',
+        recoverable_edges
+    )
+
+    the_E = 1 - (
+        len(deleted_edges) -
+        len(recoverable_edges)
+    ) / len(G_before.edges())
+
+    if len(G_copy.nodes()) == 1:
+
+        break
+
+    Gcc1 = sorted(
+        nx.connected_components(G_copy),
+        key=len,
+        reverse=True
+    )
+
+    largest_cc1 = G_copy.subgraph(Gcc1[0])
+
+    n_lcc1 = len(largest_cc1.nodes)
+
+    the_R = n_lcc1 / (n_before - c1)
+
+    the_R_array[c1] = the_R
+
+    the_D_array[c1] = the_D
+
+    the_E_array[c1] = the_E
+
+
+before_random_R = the_R_array
+
+before_random_D = the_D_array
+
+before_random_E = the_E_array
+
+
+# =========================================
+# Network After Optimization
+# =========================================
+
+# -----------------------------------------
+# Malicious Attack
+# -----------------------------------------
+the_R_array = np.zeros(n_after)
+
+the_D_array = np.zeros(n_after)
+
+the_E_array = np.zeros(n_after)
+
+c1 = 0
+
+G_copy = G_after.copy()
+
+Gcc1 = sorted(
+    nx.connected_components(G_copy),
+    key=len,
+    reverse=True
+)
+
+largest_cc1 = G_copy.subgraph(Gcc1[0])
+
+n_lcc1 = len(largest_cc1.nodes)
+
+the_R = n_lcc1 / (n_after - c1)
+
+the_R_array[0] = the_R
+
+the_D_array[0] = 1
+
+the_E_array[0] = 1
+
+while True:
+
+    c1 = c1 + 1
+
+    if c1 == n_after:
+
+        break
+
+    G_copy = intentional_attack_degree(G_copy)
+
+    deleted_nodes = (
+        G_after.nodes() -
+        G_copy.nodes()
+    )
+
+    remaining_nodes = G_copy.nodes()
+
+    remaining_neighbors = set()
+
+    for node in remaining_nodes:
+
+        neighbors = G_after.neighbors(node)
+
+        remaining_neighbors.update(neighbors)
+
+    recoverable_nodes = (
+        remaining_neighbors.intersection(
+            deleted_nodes
+        )
+    )
+
+    print(
+        'recoverable_nodes',
+        recoverable_nodes
+    )
+
+    the_D = 1 - (
+        len(deleted_nodes) -
+        len(recoverable_nodes)
+    ) / n_after
+
+    deleted_edges = (
+        G_after.edges() -
+        G_copy.edges()
+    )
+
+    recoverable_edges = set()
+
+    for edge in deleted_edges:
+
+        if (
+            edge[0] in G_copy.nodes()
+            and
+            edge[1] in G_copy.nodes()
+        ):
+
+            recoverable_edges.add(edge)
+
+    print(
+        'recoverable_edges',
+        recoverable_edges
+    )
+
+    the_E = 1 - (
+        len(deleted_edges) -
+        len(recoverable_edges)
+    ) / len(G_after.edges())
+
+    if len(G_copy.nodes()) == 1:
+
+        break
+
+    Gcc1 = sorted(
+        nx.connected_components(G_copy),
+        key=len,
+        reverse=True
+    )
+
+    largest_cc1 = G_copy.subgraph(Gcc1[0])
+
+    n_lcc1 = len(largest_cc1.nodes)
+
+    the_R = n_lcc1 / (n_after - c1)
+
+    the_R_array[c1] = the_R
+
+    the_D_array[c1] = the_D
+
+    the_E_array[c1] = the_E
+
+
+after_intention_R = the_R_array
+
+after_intention_D = the_D_array
+
+after_intention_E = the_E_array
+
+
+print("===============")
+
+
+# =========================================
+# Random Attack After Optimization
+# =========================================
+the_R_array = np.zeros(n_after)
+
+the_D_array = np.zeros(n_after)
+
+the_E_array = np.zeros(n_after)
+
+c1 = 0
+
+G_copy = G_after.copy()
+
+Gcc1 = sorted(
+    nx.connected_components(G_copy),
+    key=len,
+    reverse=True
+)
+
+largest_cc1 = G_copy.subgraph(Gcc1[0])
+
+n_lcc1 = len(largest_cc1.nodes)
+
+the_R = n_lcc1 / (n_after - c1)
+
+the_R_array[0] = the_R
+
+the_D_array[0] = 1
+
+the_E_array[0] = 1
+
+while True:
+
+    c1 = c1 + 1
+
+    if c1 == n_after:
+
+        break
+
+    G_copy = random_attack(G_copy)
+
+    deleted_nodes = (
+        G_after.nodes() -
+        G_copy.nodes()
+    )
+
+    remaining_nodes = G_copy.nodes()
+
+    remaining_neighbors = set()
+
+    for node in remaining_nodes:
+
+        neighbors = G_after.neighbors(node)
+
+        remaining_neighbors.update(neighbors)
+
+    recoverable_nodes = (
+        remaining_neighbors.intersection(
+            deleted_nodes
+        )
+    )
+
+    print(
+        'recoverable_nodes',
+        recoverable_nodes
+    )
+
+    the_D = 1 - (
+        len(deleted_nodes) -
+        len(recoverable_nodes)
+    ) / n_after
+
+    deleted_edges = (
+        G_after.edges() -
+        G_copy.edges()
+    )
+
+    recoverable_edges = set()
+
+    for edge in deleted_edges:
+
+        if (
+            edge[0] in G_copy.nodes()
+            and
+            edge[1] in G_copy.nodes()
+        ):
+
+            recoverable_edges.add(edge)
+
+    print(
+        'recoverable_edges',
+        recoverable_edges
+    )
+
+    the_E = 1 - (
+        len(deleted_edges) -
+        len(recoverable_edges)
+    ) / len(G_after.edges())
+
+    if len(G_copy.nodes()) == 1:
+
+        break
+
+    Gcc1 = sorted(
+        nx.connected_components(G_copy),
+        key=len,
+        reverse=True
+    )
+
+    largest_cc1 = G_copy.subgraph(Gcc1[0])
+
+    n_lcc1 = len(largest_cc1.nodes)
+
+    the_R = n_lcc1 / (n_after - c1)
+
+    the_R_array[c1] = the_R
+
+    the_D_array[c1] = the_D
+
+    the_E_array[c1] = the_E
+
+
+after_random_R = the_R_array
+
+after_random_D = the_D_array
+
+after_random_E = the_E_array
+
+
+# =========================================
+# Plot Connection Robustness
+# =========================================
+plt.figure(figsize=(12, 4.8))
+
+plt.subplot(121)
+
+plt.plot(
+    range(n_before),
+    before_intention_R,
+    "m-",
+    markersize=5,
+    label=u'Malicious Attack'
+)
+
+plt.plot(
+    range(n_before),
+    before_random_R,
+    "b-",
+    markersize=5,
+    label=u'Random Attack'
+)
+
+plt.legend(
+    loc=1,
+    edgecolor="black",
+    fontsize=f_size,
+    fancybox=False
+)
+
+plt.xlabel(
+    u"Number of removed nodes",
+    fontsize=f_size
+)
+
+plt.ylabel(
+    u"Connection Robustness",
+    fontsize=f_size
+)
+
+plt.title(u"LDF", fontsize=f_size)
+
+plt.ylim(-0.2, 1.05)
+
+
+plt.subplot(122)
+
+plt.plot(
+    range(n_after),
+    after_intention_R,
+    "m-",
+    markersize=5,
+    label=u'Malicious Attack'
+)
+
+plt.plot(
+    range(n_after),
+    after_random_R,
+    "b-",
+    markersize=5,
+    label=u'Random Attack'
+)
+
+plt.legend(
+    loc=1,
+    edgecolor="black",
+    fontsize=f_size,
+    fancybox=False
+)
+
+plt.xlabel(
+    u"Number of removed nodes",
+    fontsize=f_size
+)
+
+plt.ylabel(
+    u"Connection Robustness",
+    fontsize=f_size
+)
+
+plt.title(u"R_LDF", fontsize=f_size)
+
+plt.ylim(-0.2, 1.05)
+
+plt.tight_layout()
+
+plt.savefig(
+    'Connection Robustness.png',
+    dpi=300
+)
+
+
+# =========================================
+# Plot Recovery Robustness
+# =========================================
+plt.figure(figsize=(12, 4.8))
+
+plt.subplot(121)
+
+plt.plot(
+    range(n_before),
+    before_intention_D,
+    "m-",
+    markersize=5,
+    label=u'Node-Malicious Attack'
+)
+
+plt.plot(
+    range(n_before),
+    before_random_D,
+    "b-",
+    markersize=5,
+    label=u'Node-Random Attack'
+)
+
+plt.plot(
+    range(n_before),
+    before_intention_E,
+    "m--",
+    markersize=5,
+    label=u'Edge-Malicious Attack'
+)
+
+plt.plot(
+    range(n_before),
+    before_random_E,
+    "b--",
+    markersize=5,
+    label=u'Edge-Random Attack'
+)
+
+plt.legend(
+    loc=1,
+    edgecolor="black",
+    fancybox=False
+)
+
+plt.xlabel(
+    u"Number of removed nodes",
+    fontsize=f_size
+)
+
+plt.ylabel(
+    u"Recovery Robustness",
+    fontsize=f_size
+)
+
+plt.title(u"LDF", fontsize=f_size)
+
+
+plt.subplot(122)
+
+plt.plot(
+    range(n_after),
+    after_intention_D,
+    "m-",
+    markersize=5,
+    label=u'Node-Malicious Attack'
+)
+
+plt.plot(
+    range(n_after),
+    after_random_D,
+    "b-",
+    markersize=5,
+    label=u'Node-Random Attack'
+)
+
+plt.plot(
+    range(n_after),
+    after_intention_E,
+    "m--",
+    markersize=5,
+    label=u'Edge-Malicious Attack'
+)
+
+plt.plot(
+    range(n_after),
+    after_random_E,
+    "b--",
+    markersize=5,
+    label=u'Edge-Random Attack'
+)
+
+plt.legend(
+    loc=1,
+    edgecolor="black",
+    fancybox=False
+)
+
+plt.xlabel(
+    u"Number of removed nodes",
+    fontsize=f_size
+)
+
+plt.ylabel(
+    u"Recovery Robustness",
+    fontsize=f_size
+)
+
+plt.title(u"R_LDF", fontsize=f_size)
+
+plt.tight_layout()
+
+plt.savefig(
+    'Recovery Robustness.png',
+    dpi=300
+)
+
+
+# =========================================
+# Export Results
+# =========================================
+pd_data1 = pd.DataFrame({
+
+    'Connection Robustness-Malicious Attack':
+        before_intention_R,
+
+    'Connection Robustness-Random Attack':
+        before_random_R,
+
+    'Node Recovery Robustness-Malicious Attack':
+        before_intention_D,
+
+    'Node Recovery Robustness-Random Attack':
+        before_random_D,
+
+    'Edge Recovery Robustness-Malicious Attack':
+        before_intention_E,
+
+    'Edge Recovery Robustness-Random Attack':
+        before_random_E
+})
+
+pd_data1.to_csv(
+    'LDF.csv',
+    index=None
+)
+
+
+pd_data2 = pd.DataFrame({
+
+    'Connection Robustness-Malicious Attack':
+        after_intention_R,
+
+    'Connection Robustness-Random Attack':
+        after_random_R,
+
+    'Node Recovery Robustness-Malicious Attack':
+        after_intention_D,
+
+    'Node Recovery Robustness-Random Attack':
+        after_random_D,
+
+    'Edge Recovery Robustness-Malicious Attack':
+        after_intention_E,
+
+    'Edge Recovery Robustness-Random Attack':
+        after_random_E
+})
+
+pd_data2.to_csv(
+    'R_LDF.csv',
+    index=None
+)
