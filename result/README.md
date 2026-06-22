@@ -1,5 +1,5 @@
  MSPA analysis results
-<<img width="2480" height="1850" alt="MSPA" src="https://github.com/user-attachments/assets/25e80994-ef28-44d4-b729-eaaa742ed549" />
+<img width="2480" height="1850" alt="MSPA" src="https://github.com/user-attachments/assets/25e80994-ef28-44d4-b729-eaaa742ed549" />
 Ecological source identification results
 <img width="2480" height="2208" alt="resources" src="https://github.com/user-attachments/assets/1fcd24b3-e1ce-4556-a7e0-fea7f19eefcf" />
  Resistance surface evaluation and modification results
